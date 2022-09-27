@@ -13,7 +13,7 @@ services:
     command: >
       bash -c "
         find /temp -mindepth 1 -delete && 
-        git clone git@github.com:ezzaouia/supabase.git &&
+        git clone https://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@github.com:ezzaouia/supabase.git &&
         cp -R ./supabase/docker/volumes/db/init/. /db_config
       "
     volumes:
