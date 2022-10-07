@@ -11,16 +11,22 @@ services:
   git-checkout:
     image: bitnami/git:latest
     working_dir: /temp
+    environment:
+      - HTTP_PROXY=http://proxy.univ-lemans.fr:3128
+      - HTTPS_PROXY=http://proxy.univ-lemans.fr:3128
     command: >
       bash -c "
         find /temp -mindepth 1 -delete && 
         git clone https://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@github.com/ezzaouia/mixap-supabase.git &&
-        cp -R ./mixap-supabase/docker/volumes/api/. /kong_config
+        cp -R ./mixap-supabase/docker/volumes/. /supabase_config
       "
     volumes:
-      - kong_config:/kong_config
+      - kong_config:/supabase_config/api
+      - db_config:/supabase_config/db/init
+      - supabase_storage:/supabase_config/storage
 
   studio:
+    hostname: studio
     container_name: supabase-studio
     image: supabase/studio:latest
     restart: unless-stopped
@@ -36,6 +42,7 @@ services:
       SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
 
   kong:
+    hostname: kong
     container_name: supabase-kong
     image: kong:2.1
     restart: unless-stopped
@@ -52,10 +59,11 @@ services:
       - kong_config:/var/lib/kong
 
   auth:
+    hostname: auth
     container_name: supabase-auth
     image: supabase/gotrue:v2.10.0
-    #depends_on:
-    #  - db # Disable this if you are using an external Postgres database
+    depends_on:
+      - db # Disable this if you are using an external Postgres database
     restart: unless-stopped
     environment:
       GOTRUE_API_HOST: 0.0.0.0
@@ -92,10 +100,11 @@ services:
       GOTRUE_SMS_AUTOCONFIRM: ${ENABLE_PHONE_AUTOCONFIRM}
 
   rest:
+    hostname: rest
     container_name: supabase-rest
     image: postgrest/postgrest:v9.0.1
-    #depends_on:
-    #  - db # Disable this if you are using an external Postgres database
+    depends_on:
+      - db # Disable this if you are using an external Postgres database
     restart: unless-stopped
     environment:
       PGRST_DB_URI: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
@@ -105,10 +114,11 @@ services:
       PGRST_DB_USE_LEGACY_GUCS: "false"
 
   realtime:
+    hostname: realtime
     container_name: supabase-realtime
     image: supabase/realtime:v0.22.4
-    #depends_on:
-     # - db # Disable this if you are using an external Postgres database
+    depends_on:
+      - db # Disable this if you are using an external Postgres database
     restart: unless-stopped
     environment:
       DB_HOST: ${POSTGRES_HOST}
@@ -129,10 +139,11 @@ services:
       && ./prod/rel/realtime/bin/realtime start"
 
   storage:
+    hostname: storage
     container_name: supabase-storage
     image: supabase/storage-api:v0.10.0
     depends_on:
-    #  - db # Disable this if you are using an external Postgres database
+      - db # Disable this if you are using an external Postgres database
       - rest
     restart: unless-stopped
     environment:
@@ -153,10 +164,11 @@ services:
       - supabase_storage:/var/lib/storage
 
   meta:
+    hostname: meta
     container_name: supabase-meta
     image: supabase/postgres-meta:v0.29.0
-   # depends_on:
-   #   - db # Disable this if you are using an external Postgres database
+    depends_on:
+      - db # Disable this if you are using an external Postgres database
     restart: unless-stopped
     environment:
       PG_META_PORT: 8080
@@ -166,8 +178,26 @@ services:
       PG_META_DB_USER: ${POSTGRES_USER}
       PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
 
+  db:
+    hostname: db
+    container_name: supabase-db
+    image: supabase/postgres:14.1.0.21
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
+    restart: unless-stopped
+    ports:
+      - ${POSTGRES_PORT}:5432
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - HTTP_PROXY=http://proxy.univ-lemans.fr:3128
+      - HTTPS_PROXY=http://proxy.univ-lemans.fr:3128
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - db_config:/docker-entrypoint-initdb.d
+
 volumes:
   kong_config:
+  db_config:
+  postgres_data:
   supabase_storage:
 
   # Comment out everything below this point if you are using an external Postgres database
